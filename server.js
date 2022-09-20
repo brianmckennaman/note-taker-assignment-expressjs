@@ -1,12 +1,14 @@
 const express = require('express')
+const fs = require('fs');
 const notes = require('express').Router();
-const { readAndAppend } = require('./helpers/fsUtils');
+const { readAndAppend, readFromFile, writeToFile } = require('./helpers/fsUtils');
 const path = require('path');
 const uuid = require('./helpers/uuid')
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
 const PORT = process.env.port || 3001;
 
@@ -18,16 +20,16 @@ app.get('/notes', (req, res) =>
     res.sendFile(path.join(__dirname, '/public/notes.html'))
     );
 
-notes.get('/', (req, res) => readFromFile('./db/db.json').then((data) => res.json(JSON.parse(data))));
+app.get('/api/notes', (req, res) => readFromFile('./db/db.json').then((data) => res.json(JSON.parse(data))));
 
-notes.post('/', (req, res) => {
+app.post('/api/notes', (req, res) => {
     const { title, text } = req.body;
 
     if(title && text) {
         const newNote = {
             title,
             text,
-            note_id: uuid()
+            id: uuid()
         };
         readAndAppend(newNote, './db/db.json');
 
@@ -40,6 +42,25 @@ notes.post('/', (req, res) => {
     } else {
         res.json('Error in posting new note')
     }
+})
+
+app.delete('/api/notes/:id', (req, res) => {
+    console.log(req.params.id)
+    fs.readFile('./db/db.json', 'utf8', (err, data) => {
+        console.log(data)
+        if (err) {
+            res.status(500).send('Error deleting note')
+        } else {
+            const parsedData = JSON.parse(data);
+            for (let i = 0; i < parsedData.length; i++) {
+                if (req.params.id === parsedData[i].id) {
+                    parsedData.splice(i, 1)
+                }                
+            }
+            writeToFile('./db/db.json', parsedData)
+            res.json('Note deleted');
+        }
+    })
 })
 
 
